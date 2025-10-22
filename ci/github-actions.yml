@@ -1,0 +1,29 @@
+name: Django CI/CD
+
+on:
+  push:
+    branches:
+      - ITA706
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: pip install -r django_app/requirements.txt
+
+      - name: Run tests
+        run: python3 selenium/test_django_app.py
+
+      - name: Deploy via Ansible
+        uses: dawidd6/action-ansible-playbook@v2
+        with:
+          playbook: ansible/playbooks/deploy_stack.yml
+          inventory: ansible/inventory.ini

@@ -1,0 +1,45 @@
+---
+- name: Join worker nodes to Docker Swarm
+  hosts: workers
+  become: yes
+  vars:
+    manager_ip: "{{ hostvars['manager']['ansible_host'] }}"
+    token_file: /tmp/worker_join_token.txt
+
+  tasks:
+    - name: Gather facts
+      ansible.builtin.setup:
+
+    - name: Check if node is already part of a swarm
+      command: docker info --format '{{.Swarm.NodeID}}'
+      register: swarm_status
+      ignore_errors: yes
+
+    - name: Leave existing swarm if node is already part of one
+      command: docker swarm leave --force
+      when: swarm_status.rc == 0
+      ignore_errors: yes
+
+    - name: Read worker join token from manager
+      ansible.builtin.slurp:
+        src: "{{ token_file }}"
+      delegate_to: manager
+      register: token_content
+
+    - name: Decode join token
+      set_fact:
+        decoded_join_token: "{{ token_content.content | b64decode }}"
+
+    - name: Join the swarm
+      command: docker swarm join --token {{ decoded_join_token }} {{ manager_ip }}:2377
+      register: join_result
+      ignore_errors: yes
+
+    - name: Display join result or skip if already part of swarm
+      debug:
+        msg: >
+          {% if 'This node is already part of a swarm' in join_result.stderr | default('') %}
+            Node already part of swarm, skipping join.
+          {% else %}
+            Swarm join result: {{ join_result.stdout }}
+          {% endif %}
